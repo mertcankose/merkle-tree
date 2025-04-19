@@ -1,0 +1,14 @@
+{
+  "0QARfBT9PMJ_TjX8bUqFvI-ZMqixM7kY68_-7tmVm-khfOyj": {
+    "amount": "10000000000",
+    "proof": [
+      "0x00d5921736a80dfed432838e9e4ecbbdf956a2841229687e0f03117ef69dfa45"
+    ]
+  },
+  "0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5": {
+    "amount": "20000000000",
+    "proof": [
+      "0x745bf948743de460387b2fa9e1f5c096ecf756b03827bb89e9eadedee4148932"
+    ]
+  }
+}
