@@ -1,0 +1,10 @@
+{
+    "name": "MRTMINTLESS",
+    "description": "A mintless jetton on TON blockchain created with Merkle proofs",
+    "symbol": "MRTM",
+    "decimals": 9,
+    "image": "https://mertcankose.com/tonminter.png",
+    "image_data": "https://mertcankose.com/tonminter.png",
+    "mintless_merkle_dump_uri": "https://bustling-sequoia-mouth.glitch.me/merkle-dump.json",
+    "custom_payload_api_uri": "https://bustling-sequoia-mouth.glitch.me/custom-payload/"
+}

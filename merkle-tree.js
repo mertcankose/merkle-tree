@@ -6,8 +6,8 @@ const keccak256 = require('keccak256');
 
 // Airdrop alıcıları ve miktarlarını tanımlayın
 const recipients = [
-  { address: "0QARfBT9PMJ_TjX8bUqFvI-ZMqixM7kY68_-7tmVm-khfOyj", amount: "10000000000" },  // 10 JETTON
-  { address: "0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5", amount: "20000000000" }, // 20 JETTON
+  { address: "0QARfBT9PMJ_TjX8bUqFvI-ZMqixM7kY68_-7tmVm-khfOyj", amount: "30000000000" },  // 30 JETTON
+  { address: "0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5", amount: "70000000000" }, // 70 JETTON
 ];
 
 // merkletreejs kütüphanesi ile Merkle ağacı oluştur

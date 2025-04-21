@@ -1,14 +1,14 @@
 {
   "0QARfBT9PMJ_TjX8bUqFvI-ZMqixM7kY68_-7tmVm-khfOyj": {
-    "amount": "10000000000",
+    "amount": "30000000000",
     "proof": [
-      "0x00d5921736a80dfed432838e9e4ecbbdf956a2841229687e0f03117ef69dfa45"
+      "0xb38b2bbec2c752e716e2479dedc23bc56ea9ab97e72afdd4f638806a8a76de47"
     ]
   },
   "0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5": {
-    "amount": "20000000000",
+    "amount": "70000000000",
     "proof": [
-      "0x745bf948743de460387b2fa9e1f5c096ecf756b03827bb89e9eadedee4148932"
+      "0xc9b7ad4727c0436bfb632e8c806a7def37c06725952462ed692dd1b8e3e4fde0"
     ]
   }
 }
