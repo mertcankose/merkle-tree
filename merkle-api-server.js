@@ -20,6 +20,13 @@ const merkleData = Object.entries(proofs).map(([address, data]) => {
   };
 });
 
+app.get('/jetton-metadata.json', (req, res) => {
+  // Instead of using sendFile, read the file and send as text/plain
+  const metadata = fs.readFileSync(__dirname + '/jetton-metadata.json', 'utf-8');
+  res.setHeader('Content-Type', 'text/plain');
+  res.send(metadata);
+});
+
 // Tam Merkle dump verilerini sunmak için endpoint
 app.get('/merkle-dump.json', (req, res) => {
   res.json(merkleData);
