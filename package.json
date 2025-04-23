@@ -4,6 +4,7 @@
   "main": "merkle-tree.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "generate": "node merkle-tree.js",
     "start": "node merkle-api-server.js"
   },
   "engines": {

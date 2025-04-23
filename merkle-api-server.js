@@ -1,8 +1,7 @@
-
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
-const { Address, beginCell, Cell } = require('@ton/core');
+const { Address, beginCell, Cell, Dictionary } = require('@ton/core');
 const { TonClient } = require('@ton/ton');
 const { Op } = require('./JettonConstants');
 
@@ -18,7 +17,6 @@ const minterAddress = "EQCL7ilNT1hXNJc_T5iQ4mHjNRl_Poj-cw7EoadHQMMrrLj_";
 const merkleRoot = 73477099393965920966297498838768787378984958807176615475761377358790687961624n;
 
 const API_KEY = 'b5982aadb3cf1211ff804df20704e55ec92439365b39858a4c3990794f080126';
-
 
 // TON Client kurulumu
 const client = new TonClient({
@@ -49,27 +47,41 @@ async function calculateJettonWalletAddress(ownerAddress) {
 // Claim için gerekli payload'ı oluşturan fonksiyon - JettonWallet wrapper'ından
 function createClaimPayload(proofData) {
   try {
-    // proofData bir dizi olduğundan Cell oluşturmak için önce serileştirelim
-    const proofCell = beginCell();
+    // Proof dizisi için hücre referansları oluşturalım
+    const buildProofCell = (proofItems, index = 0) => {
+      if (index >= proofItems.length) {
+        return null;
+      }
+      
+      // Geçerli kanıt öğesini al
+      const proofItem = proofItems[index];
+      
+      // Hex string'i BigInt'e çevir (0x prefix'i kaldır)
+      const proofBigInt = BigInt(proofItem.replace(/^0x/, ''));
+      
+      const cell = beginCell();
+      
+      // Hash'i 256 bit olarak depola
+      cell.storeUint(proofBigInt, 256);
+      
+      // Varsa diğer kanıt öğelerini referans olarak ekle
+      const nextCell = buildProofCell(proofItems, index + 1);
+      if (nextCell) {
+        cell.storeRef(nextCell);
+      }
+      
+      return cell.endCell();
+    };
     
-    // Proof dizisinin her elemanını (hex string) storeUint ile hücreye kaydet
-    if (Array.isArray(proofData) && proofData.length > 0) {
-      // İlk elemanı al
-      const proofItem = proofData[0];
-      
-      // Hex string'i BigInt'e çevir
-      const proofBigInt = BigInt(proofItem);
-      
-      // 256 bit olarak kaydet
-      proofCell.storeUint(proofBigInt, 256);
-    } else {
-      throw new Error('Proof verisi geçersiz biçimde');
+    const proofCell = buildProofCell(proofData);
+    if (!proofCell) {
+      throw new Error('Geçerli bir proof veri yapısı oluşturulamadı');
     }
     
     // JettonWallet wrapper'ındaki claimPayload metodunu taklit eder
     const payload = beginCell()
       .storeUint(Op.merkle_airdrop_claim, 32)    // airdrop_claim operation code
-      .storeRef(proofCell.endCell())      // Merkle proof'u ref olarak ekle
+      .storeRef(proofCell)      // Merkle proof'u ref olarak ekle
       .endCell();
     
     return payload.toBoc().toString('base64');
@@ -77,12 +89,6 @@ function createClaimPayload(proofData) {
     console.error('Error creating claim payload:', error);
     throw error;
   }
-}
-
-// TON transferi için deep link oluşturan fonksiyon
-function createTonDeepLink(toAddress, amount, payload) {
-  // TON transfer deep link formatı
-  return `ton://transfer/${toAddress}?amount=${amount}&bin=${payload}`;
 }
 
 // Jetton metadata endpoint
@@ -93,16 +99,71 @@ app.get('/jetton-metadata.json', (req, res) => {
   res.send(metadata);
 });
 
-// Merkle dump verilerini sunmak için endpoint
+// Merkle dump verilerini JSON formatında sunmak için endpoint
 app.get('/merkle-dump.json', (req, res) => {
   const merkleData = Object.entries(proofs).map(([address, data]) => {
     return {
       address: address,
-      amount: data.amount
+      amount: data.amount,
+      start_from: data.start_from,
+      expire_at: data.expire_at
     };
   });
   
   res.json(merkleData);
+});
+
+// Merkle dump verilerini BoC formatında sunmak için endpoint
+app.get('/merkle-dump.boc', (req, res) => {
+  try {
+    // airdropData.json dosyasını okuyoruz
+    const airdropDataJson = JSON.parse(fs.readFileSync('airdropData.json', 'utf-8'));
+    
+    // Dictionary yapısı oluşturma
+    const { Dictionary, beginCell, Address } = require('@ton/core');
+    
+    // Airdrop verisi için Dictionary değer tipi
+    const airDropValue = {
+      serialize: (src, builder) => {
+        builder.storeCoins(BigInt(src.amount));
+        builder.storeUint(src.start_from, 48);
+        builder.storeUint(src.expire_at, 48);
+      },
+      parse: (src) => {
+        return {
+          amount: src.loadCoins(),
+          start_from: src.loadUint(48),
+          expire_at: src.loadUint(48)
+        };
+      }
+    };
+    
+    // Dictionary oluşturma
+    const dict = Dictionary.empty(Dictionary.Keys.Address(), airDropValue);
+    
+    // JSON verilerini dictionary'ye ekleme
+    airdropDataJson.recipients.forEach(recipient => {
+      dict.set(Address.parse(recipient.address), {
+        amount: BigInt(recipient.amount),
+        start_from: recipient.start_from,
+        expire_at: recipient.expire_at
+      });
+    });
+    
+    // Dictionary'i cell'e dönüştürme
+    const cell = beginCell().storeDictDirect(dict).endCell();
+    
+    // BoC formatına dönüştürme
+    const bocBuffer = cell.toBoc();
+    
+    // Binary veri olarak gönder
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename=merkle_dump.boc');
+    res.send(bocBuffer);
+  } catch (error) {
+    console.error('Error generating BoC:', error);
+    res.status(500).json({ error: 'Failed to generate BoC: ' + error.message });
+  }
 });
 
 // Belirli bir adres için kanıt almak için endpoint
@@ -116,58 +177,10 @@ app.get('/proof/:address', (req, res) => {
   res.json({
     address: address,
     amount: proofs[address].amount,
+    start_from: proofs[address].start_from,
+    expire_at: proofs[address].expire_at,
     proof: proofs[address].proof
   });
-});
-
-// Claim için gerekli bilgileri döndüren basit endpoint (kullanıcı dostu)
-app.get('/claim/:address', async (req, res) => {
-  const address = req.params.address;
-  
-  if (!proofs[address]) {
-    return res.status(404).json({ 
-      error: 'Address not found in airdrop list' 
-    });
-  }
-  
-  try {
-    // Airdrop bilgilerini al
-    const amount = proofs[address].amount;
-    const proofData = proofs[address].proof;
-    
-    // Claim için gerekli payload'ı oluştur
-    const custom_payload = createClaimPayload(proofData);
-    
-    // JettonWallet adresini hesapla
-    const jettonWalletAddress = await calculateJettonWalletAddress(address);
-    
-    // TON transfer için deep link oluştur (0.05 TON ile)
-    const tonDeepLink = createTonDeepLink(minterAddress, "0.05", custom_payload);
-    
-    // Kullanıcı dostu yanıt döndür
-    res.json({
-      address: address,
-      amount: amount,
-      jettonMaster: minterAddress,
-      jettonWallet: jettonWalletAddress,
-      claimInstructions: {
-        step1: "Aşağıdaki 'Claim TON' düğmesine tıklayın veya deep link'i cüzdanınızda açın",
-        step2: "Cüzdanınızda açılan transfer işlemini onaylayın",
-        step3: "İşlem onaylandıktan sonra jetton'larınız cüzdanınıza otomatik olarak gelecektir"
-      },
-      claimURL: tonDeepLink,
-      claimButtonHTML: `<a href="${tonDeepLink}" style="display:inline-block;background:#0088CC;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;font-weight:bold;">Claim TON</a>`,
-      technicalDetails: {
-        custom_payload: custom_payload,
-        proof: proofData
-      }
-    });
-  } catch (error) {
-    console.error('Error generating claim data:', error);
-    res.status(500).json({ 
-      error: 'Failed to generate claim data: ' + error.message 
-    });
-  }
 });
 
 // Cüzdanlar için claim endpoint'i - geliştiriciler için teknik detaylar
@@ -183,6 +196,8 @@ app.get('/wallet/:address', async (req, res) => {
   try {
     // Airdrop bilgilerini al
     const amount = proofs[address].amount;
+    const start_from = proofs[address].start_from;
+    const expire_at = proofs[address].expire_at;
     const proofData = proofs[address].proof;
     
     // Claim için gerekli payload'ı oluştur
@@ -232,8 +247,8 @@ app.get('/wallet/:address', async (req, res) => {
       state_init: stateInitBase64,  // Eklenen state_init değeri
       compressed_info: {
         amount: amount.toString(),
-        start_from: Date.now(),
-        expired_at: Date.now() + 365 * 24 * 60 * 60 * 1000
+        start_from: start_from.toString(),
+        expire_at: expire_at.toString()
       }
     });
   } catch (error) {
@@ -257,6 +272,8 @@ app.get('/custom-payload/:address', async (req, res) => {
   try {
     // Proof bilgisini al
     const amount = proofs[address].amount;
+    const start_from = proofs[address].start_from;
+    const expire_at = proofs[address].expire_at;
     const proofData = proofs[address].proof; // Bu bir dizi
     
     // Claim payload'ı oluştur - dizinin kendisini gönder
@@ -272,6 +289,8 @@ app.get('/custom-payload/:address', async (req, res) => {
       jetton_wallet: jettonWalletAddress,
       merkle_root: merkleRoot.toString(),
       amount: amount,
+      start_from: start_from.toString(),
+      expire_at: expire_at.toString(),
       proof: proofData,
       payload: payload
     });
@@ -287,9 +306,9 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Merkle kanıt API sunucusu ${PORT} portunda çalışıyor`);
   console.log(`Jetton Metadata: http://localhost:${PORT}/jetton-metadata.json`);
-  console.log(`Merkle dump: http://localhost:${PORT}/merkle-dump.json`);
+  console.log(`Merkle dump JSON: http://localhost:${PORT}/merkle-dump.json`);
+  console.log(`Merkle dump BoC: http://localhost:${PORT}/merkle-dump.boc`);
   console.log(`Kanıt API: http://localhost:${PORT}/proof/{address}`);
-  console.log(`Claim API (Kullanıcı dostu): http://localhost:${PORT}/claim/{address}`);
   console.log(`Wallet API (Teknik): http://localhost:${PORT}/wallet/{address}`);
   console.log(`Özel payload API: http://localhost:${PORT}/custom-payload/{address}`);
 });
