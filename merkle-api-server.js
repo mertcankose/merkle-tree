@@ -13,8 +13,8 @@ app.use(express.json());
 const proofs = JSON.parse(fs.readFileSync('merkle_proofs.json', 'utf-8'));
 
 // Minter adresi - Jetton Master Adresi
-const minterAddress = "EQCL7ilNT1hXNJc_T5iQ4mHjNRl_Poj-cw7EoadHQMMrrLj_"; 
-const merkleRoot = 73477099393965920966297498838768787378984958807176615475761377358790687961624n;
+const minterAddress = "EQCTyQWasto9XBR5RDuqgO9rMcWMKHtLlXsPAlnGcXxE72y-"; 
+const merkleRoot = 87660143344744648172291186647022922927651841450730370731185721731112929687167n;
 
 const API_KEY = 'b5982aadb3cf1211ff804df20704e55ec92439365b39858a4c3990794f080126';
 
@@ -57,7 +57,14 @@ function createClaimPayload(proofData) {
       const proofItem = proofItems[index];
       
       // Hex string'i BigInt'e çevir (0x prefix'i kaldır)
-      const proofBigInt = BigInt(proofItem.replace(/^0x/, ''));
+      // Hata burada oluşuyor - 0x prefix'in olup olmadığını kontrol edelim
+      let proofHex = proofItem;
+      if (proofItem.startsWith('0x')) {
+        proofHex = proofItem.substring(2); // 0x prefix'i kaldır
+      }
+      
+      // Hex'i BigInt'e dönüştür
+      const proofBigInt = BigInt('0x' + proofHex);
       
       const cell = beginCell();
       
@@ -203,48 +210,27 @@ app.get('/wallet/:address', async (req, res) => {
     // Claim için gerekli payload'ı oluştur
     const custom_payload = createClaimPayload(proofData);
     
-    // JettonWallet adresini hesapla
-    const jettonWalletAddress = await calculateJettonWalletAddress(address);
-
-    // Minter'dan jetton_data al
-    const jettonDataResponse = await client.runMethod(
+    // ÖNEMLİ: Doğrudan Jetton Master kontratından StateInit bilgisini al
+    // Bu yöntem, en güvenilir StateInit bilgisini verecektir
+    const stateInitResponse = await client.runMethod(
       Address.parse(minterAddress),
-      "get_jetton_data",
-      []
+      "get_wallet_state_init_and_salt",
+      [{ type: "slice", cell: beginCell().storeAddress(Address.parse(address)).endCell() }]
     );
     
-    // Stack'ten elemanları doğru sırayla al
-    // İlk iki eleman int, sonraki slice, son iki eleman cell
-    const total_supply = jettonDataResponse.stack.readBigNumber(); // 1. eleman
-    const is_mintable = jettonDataResponse.stack.readNumber(); // 2. eleman
-    const admin_address = jettonDataResponse.stack.readAddress(); // 3. eleman 
-    const content = jettonDataResponse.stack.readCell(); // 4. eleman
-    const wallet_code = jettonDataResponse.stack.readCell(); // 5. eleman - ihtiyacımız olan kod!
-    
-    // JettonWallet için data hücresi oluştur
-    const dataCell = beginCell()
-      .storeUint(0, 4)  // status
-      .storeCoins(0)    // balance
-      .storeAddress(Address.parse(address))  // owner_address
-      .storeAddress(Address.parse(minterAddress))  // jetton_master_address
-      .storeUint(merkleRoot, 256)  // merkle_root
-      .storeUint(0, 10)  // salt
-      .endCell();
-    
-    // StateInit oluştur
-    const stateInit = beginCell()
-      .storeRef(wallet_code)
-      .storeRef(dataCell)
-      .endCell();
-    
+    // StateInit'i doğrudan kontrat metodundan al
+    const stateInit = stateInitResponse.stack.readCell();
     const stateInitBase64 = stateInit.toBoc().toString('base64');
+    
+    // JettonWallet adresini hesapla
+    const jettonWalletAddress = await calculateJettonWalletAddress(address);
     
     // Response hazırla
     res.json({
       owner: address,
       jetton_wallet: jettonWalletAddress,
       custom_payload: custom_payload,
-      state_init: stateInitBase64,  // Eklenen state_init değeri
+      state_init: stateInitBase64,
       compressed_info: {
         amount: amount.toString(),
         start_from: start_from.toString(),
@@ -258,6 +244,7 @@ app.get('/wallet/:address', async (req, res) => {
     });
   }
 });
+
 
 // Özel payload API - cüzdanlar için
 app.get('/custom-payload/:address', async (req, res) => {

@@ -1,17 +1,17 @@
 {
-  "merkleRoot": "87660143344744648172291186647022922927651841450730370731185721731112929687167",
+  "merkleRoot": "22200910585113151429597443461487745874427717950205949800364792043199785418088",
   "recipients": [
     {
       "address": "0QARfBT9PMJ_TjX8bUqFvI-ZMqixM7kY68_-7tmVm-khfOyj",
       "amount": "30000000000",
-      "start_from": 1745407652,
-      "expire_at": 1776943652
+      "start_from": 1745408731,
+      "expire_at": 1776944731
     },
     {
       "address": "0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5",
       "amount": "70000000000",
-      "start_from": 1745407652,
-      "expire_at": 1776943652
+      "start_from": 1745408731,
+      "expire_at": 1776944731
     }
   ]
 }
